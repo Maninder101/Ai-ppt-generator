@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
-    raise ValueError("Missing GOOGLE_API_KEY in .env file!")
+    raise ValueError("❌ Missing GOOGLE_API_KEY in .env file!")
 
 genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel("gemini-2.5-flash")
@@ -24,15 +24,14 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 # --------------------------
 # Flask App Setup
 # --------------------------
-# Serve React build from frontend/build
-app = Flask(__name__, static_folder='frontend/build')
+app = Flask(__name__, static_folder='frontend/build')  # Serve React build
 CORS(app)
 
 OUTPUT_DIR = "generated"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --------------------------
-# Utility Functions (same as before)
+# Utility Functions
 # --------------------------
 def parse_slides(text, max_slides=6):
     slides = re.findall(r"Slide\s*\d+\s*:\s*(.*?)(?=Slide\s*\d+\s*:|$)", text, re.DOTALL)
@@ -61,26 +60,30 @@ def generate_ppt_content(topic, slide_count=6):
     prompt = f"""
     Create a PowerPoint presentation outline on the topic: "{topic}".
     Include exactly {slide_count} slides.
-    Format like this:
-    Slide 1: Title
-    - Bullet 1
-    - Bullet 2
-    - Bullet 3
+    Format exactly like this:
+
+    Slide 1: Title of the slide
+    - Bullet point 1
+    - Bullet point 2
+    - Bullet point 3
     """
     try:
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        print("AI generation error:", e)
+        print("❌ Error generating content:", e)
         return None
 
 def create_ppt_from_slides(slides_data, template):
     prs = Presentation()
     prs.slide_width = Inches(13.33)
     prs.slide_height = Inches(7.5)
+
     for slide_data in slides_data:
         slide = prs.slides.add_slide(prs.slide_layouts[6])
         text_color = apply_template_style(slide, template)
+
+        # Title box
         title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.8), Inches(12.3), Inches(1.2))
         title_tf = title_box.text_frame
         title_tf.clear()
@@ -90,9 +93,12 @@ def create_ppt_from_slides(slides_data, template):
         p.font.bold = True
         p.font.color.rgb = text_color
         p.alignment = PP_ALIGN.CENTER
+
+        # Content box
         content_box = slide.shapes.add_textbox(Inches(1.5), Inches(2.3), Inches(10.3), Inches(4))
         content_tf = content_box.text_frame
         content_tf.word_wrap = True
+
         for bullet in slide_data["points"]:
             bp = content_tf.add_paragraph()
             bp.text = f"➤ {bullet.strip()}"
@@ -100,16 +106,17 @@ def create_ppt_from_slides(slides_data, template):
             bp.font.color.rgb = text_color
             bp.level = 0
             bp.space_after = Pt(10)
+
     filename = f"{uuid.uuid4()}.pptx"
     filepath = os.path.join(OUTPUT_DIR, filename)
     prs.save(filepath)
     return filename
 
 # --------------------------
-# Routes (same as before)
+# API Routes
 # --------------------------
 @app.route('/generate-ppt', methods=['POST'])
-def generate_ppt():
+def generate_ppt_api():
     data = request.get_json()
     topic_text = data.get('text', '').strip()
     template = data.get('template', 'modern')
@@ -126,7 +133,7 @@ def generate_ppt():
     })
 
 @app.route('/generate-auto-ppt', methods=['POST'])
-def generate_auto_ppt():
+def generate_auto_ppt_api():
     data = request.get_json()
     topic = data.get('topic', '').strip()
     template = data.get('template', 'modern')
@@ -152,19 +159,19 @@ def download_file(filename):
     return send_from_directory(OUTPUT_DIR, filename, as_attachment=True)
 
 # --------------------------
-# Serve React frontend
+# Serve React Frontend
 # --------------------------
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
 def serve_react(path):
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
+    if path != "" and os.path.exists(f"frontend/build/{path}"):
+        return send_from_directory("frontend/build", path)
     else:
-        return send_from_directory(app.static_folder, 'index.html')
+        return send_from_directory("frontend/build", "index.html")
 
 # --------------------------
 # Run Server
 # --------------------------
 if __name__ == '__main__':
-    print("Flask server running with Gemini AI PPT generator ready!")
-    app.run(host='0.0.0.0', port=5000)
+    print("✅ Flask server running with Gemini AI PPT generator ready!")
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
