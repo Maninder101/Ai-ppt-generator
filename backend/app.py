@@ -15,7 +15,6 @@ from dotenv import load_dotenv
 # --------------------------
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-
 if not GOOGLE_API_KEY:
     raise ValueError("❌ Missing GOOGLE_API_KEY in .env file!")
 
@@ -25,26 +24,27 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 # --------------------------
 # Flask App Setup
 # --------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FRONTEND_BUILD = os.path.join(BASE_DIR, "../frontend/build")
-OUTPUT_DIR = os.path.join(BASE_DIR, "generated")
-
-app = Flask(__name__, static_folder=FRONTEND_BUILD, static_url_path="/")
+app = Flask(__name__, static_folder='generated')
 CORS(app)
 
+OUTPUT_DIR = "generated"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --------------------------
 # Utility Functions
 # --------------------------
-def parse_slides(text, max_slides=6):
+def parse_slides(text, max_slides=50):  # Updated max_slides to 50
     slides = re.findall(r"Slide\s*\d+\s*:\s*(.*?)(?=Slide\s*\d+\s*:|$)", text, re.DOTALL)
     parsed = []
     for s in slides:
         lines = [l.strip(" -•\n") for l in s.strip().split("\n") if l.strip()]
         if lines:
-            parsed.append({"title": lines[0], "points": lines[1:]})
+            parsed.append({
+                "title": lines[0],
+                "points": lines[1:]
+            })
     return parsed[:max_slides]
+
 
 def apply_template_style(slide, template):
     theme_colors = {
@@ -54,30 +54,34 @@ def apply_template_style(slide, template):
         "creative": {"bg": RGBColor(128, 0, 128), "text": RGBColor(255, 255, 255)},
         "dark": {"bg": RGBColor(15, 15, 15), "text": RGBColor(200, 200, 200)},
     }
-
     colors = theme_colors.get(template, theme_colors["modern"])
     fill = slide.background.fill
     fill.solid()
     fill.fore_color.rgb = colors["bg"]
     return colors["text"]
 
+
 def generate_ppt_content(topic, slide_count=6):
     prompt = f"""
-    Create a PowerPoint outline on: "{topic}".
+    Create a PowerPoint presentation outline on the topic: "{topic}".
     Include exactly {slide_count} slides.
-    Format:
+    Format exactly like this:
 
-    Slide 1: Title
-    - Bullet 1
-    - Bullet 2
-    - Bullet 3
+    Slide 1: Title of the slide
+    - Bullet point 1
+    - Bullet point 2
+    - Bullet point 3
+
+    Ensure each slide has 3 concise bullet points.
+    Keep the content clear, structured, and educational.
     """
     try:
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        print("❌ Error:", e)
+        print("❌ Error generating content:", e)
         return None
+
 
 def create_ppt_from_slides(slides_data, template):
     prs = Presentation()
@@ -88,9 +92,10 @@ def create_ppt_from_slides(slides_data, template):
         slide = prs.slides.add_slide(prs.slide_layouts[6])
         text_color = apply_template_style(slide, template)
 
-        # Title
+        # Title box
         title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.8), Inches(12.3), Inches(1.2))
         title_tf = title_box.text_frame
+        title_tf.clear()
         p = title_tf.add_paragraph()
         p.text = slide_data["title"]
         p.font.size = Pt(40)
@@ -98,24 +103,26 @@ def create_ppt_from_slides(slides_data, template):
         p.font.color.rgb = text_color
         p.alignment = PP_ALIGN.CENTER
 
-        # Points
+        # Content box
         content_box = slide.shapes.add_textbox(Inches(1.5), Inches(2.3), Inches(10.3), Inches(4))
         content_tf = content_box.text_frame
-
+        content_tf.word_wrap = True
         for bullet in slide_data["points"]:
             bp = content_tf.add_paragraph()
             bp.text = f"➤ {bullet.strip()}"
             bp.font.size = Pt(24)
             bp.font.color.rgb = text_color
             bp.level = 0
+            bp.space_after = Pt(10)
 
     filename = f"{uuid.uuid4()}.pptx"
     filepath = os.path.join(OUTPUT_DIR, filename)
     prs.save(filepath)
     return filename
 
+
 # --------------------------
-# API ROUTES
+# Routes
 # --------------------------
 @app.route('/generate-ppt', methods=['POST'])
 def generate_ppt():
@@ -128,54 +135,55 @@ def generate_ppt():
 
     slides_data = parse_slides(topic_text)
     if not slides_data:
-        return jsonify({"success": False, "error": "Invalid slide format"}), 400
+        return jsonify({"success": False, "error": "No valid slides found"}), 400
 
     filename = create_ppt_from_slides(slides_data, template)
     return jsonify({
         "success": True,
-        "download_url": f"/generated/{filename}"
+        "file_path": f"/generated/{filename}",
+        "download_url": f"http://localhost:5000/generated/{filename}"
     })
+
 
 @app.route('/generate-auto-ppt', methods=['POST'])
 def generate_auto_ppt():
     data = request.get_json()
     topic = data.get('topic', '').strip()
-    slide_count = int(data.get("slide_count", 6))
-    template = data.get("template", "modern")
+    template = data.get('template', 'modern')
+    slide_count = int(data.get('slide_count', 6))
+
+    # Cap slides at 50 to prevent overload
+    if slide_count > 50:
+        slide_count = 50
 
     if not topic:
-        return jsonify({"success": False, "error": "Topic missing"}), 400
+        return jsonify({"success": False, "error": "No topic provided"}), 400
 
     ai_text = generate_ppt_content(topic, slide_count)
     if not ai_text:
-        return jsonify({"success": False, "error": "AI failed"}), 500
+        return jsonify({"success": False, "error": "AI generation failed"}), 500
 
     slides_data = parse_slides(ai_text, slide_count)
+    if not slides_data:
+        return jsonify({"success": False, "error": "AI did not return valid slides"}), 400
+
     filename = create_ppt_from_slides(slides_data, template)
 
     return jsonify({
         "success": True,
-        "slides_generated": len(slides_data),
-        "download_url": f"/generated/{filename}"
+        "file_path": f"/generated/{filename}",
+        "download_url": f"http://localhost:5000/generated/{filename}",
+        "slides_generated": len(slides_data)
     })
 
-@app.route('/generated/<path:filename>')
+
+@app.route('/generated/<path:filename>', methods=['GET'])
 def download_file(filename):
     return send_from_directory(OUTPUT_DIR, filename, as_attachment=True)
 
-# --------------------------
-# REACT FRONTEND SERVE
-# --------------------------
-@app.route('/')
-def serve_react():
-    return send_from_directory(FRONTEND_BUILD, "index.html")
-
-@app.errorhandler(404)
-def fallback(e):
-    return send_from_directory(FRONTEND_BUILD, "index.html")
 
 # --------------------------
 # Run Server
 # --------------------------
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
