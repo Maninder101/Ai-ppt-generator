@@ -4,13 +4,13 @@ import "./App.css";
 function App() {
   const [topic, setTopic] = useState("");
   const [template, setTemplate] = useState("modern");
-  const [slideCount, setSlideCount] = useState(6); // ✅ New state
+  const [slideCount, setSlideCount] = useState(10); // Default updated to 10
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [mode, setMode] = useState("auto"); // auto = AI, manual = user text
 
-  // 🔧 Backend base URL (easy to change if deployed)
-  const BASE_URL = "https://ai-ppt-generator-tphq.onrender.com";
+  // 🔧 Backend base URL (change when deployed)
+  const BASE_URL = "http://localhost:5000";
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
@@ -29,7 +29,7 @@ function App() {
 
       const payload =
         mode === "auto"
-          ? { topic, template, slide_count: slideCount } // ✅ send slide count
+          ? { topic, template, slide_count: slideCount }
           : { text: topic, template };
 
       const response = await fetch(endpoint, {
@@ -45,7 +45,7 @@ function App() {
         setStatus("✅ Presentation generated! Preparing download...");
         const link = document.createElement("a");
         link.href = data.download_url;
-        link.download = "EDUSLIDE_Presentation.pptx";
+        link.download = topic.replace(/\s+/g, "_") + ".pptx"; // dynamic filename
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -158,7 +158,7 @@ function App() {
                 </select>
               </div>
 
-              {/* ✅ Slide Count selector (only for auto mode) */}
+              {/* ✅ Slide Count selector (only for auto mode, now up to 50) */}
               {mode === "auto" && (
                 <div className="template-select">
                   <label>Slides</label>
@@ -166,7 +166,7 @@ function App() {
                     value={slideCount}
                     onChange={(e) => setSlideCount(parseInt(e.target.value))}
                   >
-                    {[4, 5, 6, 7, 8, 9, 10].map((n) => (
+                    {Array.from({ length: 47 }, (_, i) => i + 4).map((n) => (
                       <option key={n} value={n}>
                         {n} Slides
                       </option>
