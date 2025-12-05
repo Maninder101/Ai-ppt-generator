@@ -10,7 +10,7 @@ function App() {
   const [mode, setMode] = useState("auto"); // auto = AI, manual = user text
 
   // 🔧 Backend base URL (easy to change if deployed)
-  const BASE_URL = "http://localhost:5000";
+  const BASE_URL = "https://ai-ppt-generator-tphq.onrender.com";
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
