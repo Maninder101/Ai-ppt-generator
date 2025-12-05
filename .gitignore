@@ -1,5 +1,67 @@
-venv/
+# ---------------------------
+# FRONTEND (React) ignores
+# ---------------------------
+
+# dependencies
 node_modules/
-frontend/build/
-*.pyc
+.pnp/
+.pnp.js
+
+# testing
+coverage/
+
+# production
+build/
+dist/
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---------------------------
+# BACKEND (Flask) ignores
+# ---------------------------
+
+# Python virtual environment
+venv/
+env/
+
+# Python cache
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Flask env files
+backend/.env
+.env
+
+# Logs
+*.log
+
+# IDE files
+.vscode/
+.idea/
+
+# Bytecode files
+*.pyc
+
+# PPT Output files
+*.pptx
+
+# Temporary folders
+tmp/
+temp/
+
+# ---------------------------
+# OS Files
+# ---------------------------
+
+Thumbs.db
